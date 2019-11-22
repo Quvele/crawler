@@ -71,6 +71,8 @@ class Crawler:
             async with session.get(url) as response:
                 response.raise_for_status()
 
+                self.visited_urls.add(yarl.URL(url).host + '/')
+
                 # check that response is file ready to download
                 mtype, encoding = mimetypes.guess_type(url)
                 if mtype or response.content_disposition:
