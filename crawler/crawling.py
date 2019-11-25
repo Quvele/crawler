@@ -163,7 +163,7 @@ class Crawler:
 
     def get_links(self, html: str) -> Iterable:
         """
-        Gather links from document.
+        Gather links from document if they are not visited yet and link is url.
         """
         links = set()
 
