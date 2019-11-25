@@ -9,3 +9,9 @@ How to start
 ```
  docker run --rm --name my-crawler -v /home/crawler/bin:/app/bin -it crawler:0.1.0 crawl
 ```
+or
+```
+cd ~/crawler/
+pip instal .
+crawl
+```
