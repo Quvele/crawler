@@ -12,6 +12,8 @@ SUPPORTED_7ZIP_FORMATS = (
     'application/zip',
     'application/x-tar',
 )
+REQUEST_LIMIT = int(os.getenv('REQUEST_LIMIT', '100'))
+REQUEST_DELAY = int(os.getenv('REQUEST_DELAY', '3'))
 
 DEBUG = os.getenv('DEBUG') == '1'
 LOG_LEVEL = logging.DEBUG if DEBUG else logging.INFO

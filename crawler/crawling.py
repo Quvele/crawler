@@ -4,7 +4,6 @@ import io
 import mimetypes
 import os
 import uuid
-from concurrent.futures.thread import ThreadPoolExecutor
 from typing import Iterable, Optional
 
 import aiohttp
@@ -29,11 +28,11 @@ class Crawler:
         self.visited_urls = set()
         self.visited_urls.add(self.site_url)
         self.host = yarl.URL(self.site_url).host
+        self.semaphore = asyncio.Semaphore(settings.REQUEST_LIMIT)
 
     def start(self):
         logger.info('Start crawling site "%s"', self.site_url)
 
-        self.executor = ThreadPoolExecutor()
         loop = asyncio.get_event_loop()
         try:
             loop.run_until_complete(self.fetch(self.site_url))
@@ -44,7 +43,6 @@ class Crawler:
         finally:
             loop.run_until_complete(asyncio.sleep(1))
             loop.close()
-            self.executor.shutdown()
 
         self.write_to_file(self.files, 'downloaded_links')
         self.write_to_file(self.archives_report, 'archives_report')
@@ -67,27 +65,33 @@ class Crawler:
         if parent_url and self.host not in parent_url:
             return
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url) as response:
-                response.raise_for_status()
+        await asyncio.sleep(settings.REQUEST_DELAY)
 
-                self.visited_urls.add(yarl.URL(url).host + '/')
+        try:
+            async with self.semaphore:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url) as response:
+                        response.raise_for_status()
+        except Exception:
+            logger.error('Cannot fetch url: %s', url, exc_info=True)
+        else:
+            self.visited_urls.add(yarl.URL(url).host + '/')
 
-                # check that response is file ready to download
-                mtype, encoding = mimetypes.guess_type(url)
-                if mtype or response.content_disposition:
-                    self.files.add(url)
-                    content = await response.read()
-                    self.executor.submit(
-                        self.download, url, mtype, response, content).result()
-                    return
+            # check that response is file ready to download
+            mtype, encoding = mimetypes.guess_type(url)
+            if mtype or response.content_disposition:
+                self.files.add(url)
+                content = await response.read()
+                asyncio.get_event_loop().run_in_executor(
+                    None, self.download, url, mtype, response, content)
+                return
 
-                html = await response.text()
-                fs = [
-                    asyncio.ensure_future(self.fetch(link, parent_url=url))
-                    for link in self.get_links(html)
-                ]
-                await asyncio.gather(*fs)
+            html = await response.text()
+            fs = [
+                asyncio.ensure_future(self.fetch(link, parent_url=url))
+                for link in self.get_links(html)
+            ]
+            await asyncio.gather(*fs)
 
     def download(
             self,
